@@ -219,6 +219,9 @@ def demo_queue_choice() -> None:
 
 # ---------------------------------------------------------------------------
 async def main() -> None:
+    from knowflow.demos._console import safe_stdout
+    safe_stdout()
+
     print(__doc__)
     print("队列后端:", type(create_queue()).__name__, "（Kafka URL 未配置时自动降级到内存）")
 

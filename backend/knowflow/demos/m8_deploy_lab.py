@@ -258,6 +258,9 @@ def demo_checklist():
 
 # ---------------------------------------------------------------------------
 async def main() -> None:
+    from knowflow.demos._console import safe_stdout
+    safe_stdout()
+
     print(__doc__)
 
     demo_dockerfile()

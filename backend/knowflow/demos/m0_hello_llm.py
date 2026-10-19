@@ -36,6 +36,9 @@ class TicketSummary(BaseModel):
 
 
 def main() -> None:
+    from knowflow.demos._console import safe_stdout
+    safe_stdout()
+
     llm = LLMClient()
 
     # ---------- 1. 基础对话（使用注册表里的模板，而不是硬编码字符串）----------

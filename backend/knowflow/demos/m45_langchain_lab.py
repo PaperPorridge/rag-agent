@@ -328,6 +328,9 @@ def demo_tradeoff() -> None:
 
 
 def main() -> None:
+    from knowflow.demos._console import safe_stdout
+    safe_stdout()
+
     print("=" * 64)
     print("M4.5 · 手写 vs LangChain 对照实验室")
     print("=" * 64)

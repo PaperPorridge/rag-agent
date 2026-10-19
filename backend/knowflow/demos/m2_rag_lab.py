@@ -229,6 +229,9 @@ def demo_end_to_end() -> None:
 
 
 def main() -> None:
+    from knowflow.demos._console import safe_stdout
+    safe_stdout()
+
     demo_chunking()
     demo_retrieval_modes(_build_demo_pipeline())
     demo_hybrid()

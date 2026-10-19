@@ -206,6 +206,9 @@ def demo_openapi(client: TestClient) -> None:
 
 # ---------------------------------------------------------------------------
 async def main() -> None:
+    from knowflow.demos._console import safe_stdout
+    safe_stdout()
+
     print(__doc__)
 
     reset_singletons()

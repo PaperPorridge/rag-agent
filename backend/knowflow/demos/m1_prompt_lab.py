@@ -122,6 +122,9 @@ def demo_injection(llm: LLMClient) -> None:
 
 
 def main() -> None:
+    from knowflow.demos._console import safe_stdout
+    safe_stdout()
+
     llm = LLMClient()
     demo_version_compare(llm)
     demo_few_shot(llm)

@@ -216,6 +216,9 @@ def _print_result(result) -> None:
 
 
 def main() -> None:
+    from knowflow.demos._console import safe_stdout
+    safe_stdout()
+
     demo_tool_schema()
     agent = build_agent()
     demo_single_tool(agent)

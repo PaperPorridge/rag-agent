@@ -224,6 +224,9 @@ def demo_fallback() -> None:
 
 
 def main() -> None:
+    from knowflow.demos._console import safe_stdout
+    safe_stdout()
+
     print("=" * 64)
     print("M4 · 数据层实验室 —— PostgreSQL 模型 / 会话 / Redis 缓存 / 限流")
     print("=" * 64)

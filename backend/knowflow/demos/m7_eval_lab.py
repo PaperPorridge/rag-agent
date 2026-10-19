@@ -227,6 +227,9 @@ def demo_persist(dataset, result):
 
 # ---------------------------------------------------------------------------
 async def main() -> None:
+    from knowflow.demos._console import safe_stdout
+    safe_stdout()
+
     print(__doc__)
 
     dataset = demo_dataset()
