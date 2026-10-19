@@ -1,0 +1,42 @@
+# Docker 构建上下文排除清单
+# 防止 Dockerfile 的 COPY . . 把密钥/数据库/垃圾文件打进镜像
+
+# 密钥与本地配置 —— 绝不进镜像
+.env
+.env.*
+!.env.example
+
+# 数据库与持久化数据
+*.db
+*.sqlite
+data/
+qdrant_storage/
+
+# Python 生成物
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# 版本控制与 IDE
+.git/
+.vscode/
+.idea/
+
+# 日志
+logs/
+*.log
+
+# 文档与项目（不进运行镜像）
+docs/
+*.md
+!README.md
+
+# 评估产物
+eval_reports/

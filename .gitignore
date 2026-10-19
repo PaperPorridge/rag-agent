@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# 环境与密钥 —— 绝不提交
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+
+# 数据与向量库持久化
+data/
+*.db
+*.sqlite
+qdrant_storage/
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 日志
+logs/
+*.log
+
+# 评估产物
+eval_reports/

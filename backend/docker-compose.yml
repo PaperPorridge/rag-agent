@@ -1,0 +1,146 @@
+# KnowFlow 全栈 docker-compose
+#
+# 【一键启动】
+#   docker compose up                    # 前台运行（看日志）
+#   docker compose up -d                 # 后台运行
+#   docker compose up api worker         # 只起 API 和 Worker
+#   docker compose down                  # 一键全关
+#   docker compose logs -f api           # 看 API 日志
+#
+# 【服务清单】
+#   api       FastAPI 服务（端口 8000）
+#   worker    文档异步入库消费者
+#   db        PostgreSQL 16（业务数据）
+#   redis     Redis 7（缓存/限流）
+#   kafka     Kafka（消息队列，单节点 KRaft 模式）
+#   qdrant    Qdrant（向量数据库）
+#
+# 【自查可讲】
+#   - depends_on 控制启动顺序（api 等 db 和 redis 就绪才起）
+#   - healthcheck 保证服务真正可用（不只是进程起了）
+#   - volumes 持久化数据（容器删了数据还在）
+#   - 环境变量决定生产/开发实现（PG 连接串/Redis URL/Kafka URL）
+
+services:
+  # ---------------------------------------------------------------------------
+  # API 服务
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+psycopg://knowflow:knowflow@db:5432/knowflow
+      - REDIS_URL=redis://redis:6379/0
+      - KAFKA_URL=kafka:9092
+      - MIMO_API_KEY=${MIMO_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped       # 挂了自动重启
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # Worker：文档异步入库消费者
+  # ---------------------------------------------------------------------------
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: >
+      python -c "
+      import asyncio
+      from knowflow.queue import create_queue
+      from knowflow.queue.worker import IngestWorker
+      worker = IngestWorker(queue=create_queue())
+      asyncio.run(worker.run_forever())
+      "
+    environment:
+      - DATABASE_URL=postgresql+psycopg://knowflow:knowflow@db:5432/knowflow
+      - KAFKA_URL=kafka:9092
+    depends_on:
+      db:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: knowflow
+      POSTGRES_PASSWORD: knowflow
+      POSTGRES_DB: knowflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data    # 持久化：容器删了数据还在
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U knowflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Redis
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Kafka（单节点 KRaft 模式，开发用）
+  # 生产：用 MSK（AWS）/ Confluent Cloud / 多节点集群
+  # ---------------------------------------------------------------------------
+  kafka:
+    image: apache/kafka:3.8.0
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+  # ---------------------------------------------------------------------------
+  # Qdrant 向量数据库
+  # ---------------------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"    # REST API
+      - "6334:6334"    # gRPC
+    volumes:
+      - qdrantdata:/qdrant/storage
+
+# ---------------------------------------------------------------------------
+# 持久化卷（容器删了数据还在）
+# ---------------------------------------------------------------------------
+volumes:
+  pgdata:
+  redisdata:
+  qdrantdata:
