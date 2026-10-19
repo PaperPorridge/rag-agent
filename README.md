@@ -56,20 +56,19 @@ python -m knowflow.demos.m8_deploy_lab      # 部署讲解
 
 > 部分 demo 会真调 MiMo API（`m0` / `m2` / `m3` / `m7`），需有效 `MIMO_API_KEY` 并产生少量费用。`m4` / `m5` / `m6` / `m8` 零成本可跑。
 
-## 文档索引
+## 模块索引
 
-| 文档 | 内容 |
-|---|---|
-| [docs/00-学习路线图.md](docs/00-学习路线图.md) | 总学习路径、技术栈对照、进度表 |
-| [docs/01-Prompt工程.md](docs/01-Prompt工程.md) | M1：提示词工程化 |
-| [docs/02-RAG.md](docs/02-RAG.md) | M2：分块 / Embedding / 混合检索 / 重排 / 引用 |
-| [docs/03-Agent与Function-Calling.md](docs/03-Agent与Function-Calling.md) | M3：ReAct 循环、工具 Schema、安全护栏 |
-| [docs/04-数据层.md](docs/04-数据层.md) | M4：SQLAlchemy 2.0、事务、Redis、限流 |
-| [docs/05-LangChain对照.md](docs/05-LangChain对照.md) | M4.5：手写 vs LangChain 取舍 |
-| [docs/06-消息队列.md](docs/06-消息队列.md) | M5：Kafka、幂等消费、重试与 DLQ |
-| [docs/07-服务化.md](docs/07-服务化.md) | M6：FastAPI、依赖注入、202 异步 |
-| [docs/08-评估体系.md](docs/08-评估体系.md) | M7：RAG 四指标、LLM-as-judge |
-| [docs/09-容器化与部署.md](docs/09-容器化与部署.md) | M8：Docker、compose、云映射、Linux 运维 |
+| 模块 | 内容 | 代码 |
+|---|---|---|
+| M1 | 提示词工程化：模板、版本注册、结构化输出、注入防御 | `knowflow/core/prompts.py` |
+| M2 | RAG：分块 / Embedding / 混合检索 / RRF / 重排 / 引用校验 | `knowflow/rag/` |
+| M3 | Agent：ReAct 循环、Function Calling、安全护栏 | `knowflow/agent/` |
+| M4 | 数据层：SQLAlchemy 2.0、事务、Redis 缓存、限流 | `knowflow/db/` `knowflow/cache/` |
+| M4.5 | LangChain 对照：手写 vs 框架取舍 | `knowflow/demos/m45_langchain_lab.py` |
+| M5 | 消息队列：Kafka 抽象、Worker、幂等、重试与 DLQ | `knowflow/queue/` |
+| M6 | 服务化：FastAPI、依赖注入、202 异步入库 | `knowflow/api/` |
+| M7 | 评估：四指标、LLM-as-judge、参数对比 | `knowflow/eval/` |
+| M8 | 容器化：多阶段 Dockerfile、compose 编排、云映射 | `backend/Dockerfile` |
 
 ## 架构
 
@@ -118,7 +117,3 @@ docker compose down           # 一键全关
 | Redis | ElastiCache | Memorystore | Azure Cache |
 | Kafka | MSK | Pub/Sub | Event Hubs |
 | 对象存储 | S3 | Cloud Storage | Blob Storage |
-
-## 学习路径
-
-见 [docs/00-学习路线图.md](docs/00-学习路线图.md)。每完成一个模块，更新其中的进度表。
