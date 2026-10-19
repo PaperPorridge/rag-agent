@@ -164,8 +164,13 @@ class KafkaQueue(MessageQueue):
 def create_queue(url: str | None = None, group_id: str = "knowflow-workers") -> MessageQueue:
     """
     工厂：有 Kafka URL 就用 Kafka，否则内存。
-    Kafka 连不上也降级 —— 队列挂了不该让开发跑不动测试。
+    url 不传时从配置读 KAFKA_BOOTSTRAP_SERVERS；Kafka 连不上也降级 ——
+    队列挂了不该让开发跑不动测试。
     """
+    if url is None:
+        from knowflow.core.config import get_settings
+
+        url = get_settings().kafka_bootstrap_servers or None
     if url:
         try:
             q = KafkaQueue(bootstrap_servers=url, group_id=group_id)

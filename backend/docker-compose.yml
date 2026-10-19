@@ -34,8 +34,9 @@ services:
     environment:
       - DATABASE_URL=postgresql+psycopg://knowflow:knowflow@db:5432/knowflow
       - REDIS_URL=redis://redis:6379/0
-      - KAFKA_URL=kafka:9092
-      - MIMO_API_KEY=${MIMO_API_KEY:-}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - QDRANT_URL=http://qdrant:6333
+      - MIMO_API_KEY=${MIMO_API_KEY:?请在宿主机导出 MIMO_API_KEY，或用 --env-file .env}
     depends_on:
       db:
         condition: service_healthy
@@ -55,17 +56,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: >
-      python -c "
-      import asyncio
-      from knowflow.queue import create_queue
-      from knowflow.queue.worker import IngestWorker
-      worker = IngestWorker(queue=create_queue())
-      asyncio.run(worker.run_forever())
-      "
+    # 启动逻辑放在 knowflow/queue/worker.py 的 main()，这里只留一行命令。
+    # 【本次修的坑】原来把多行 Python 写进 YAML 折叠标量（command: >），
+    # 换行被折成空格 → SyntaxError → 容器起不来、无限重启。
+    command: ["python", "-m", "knowflow.queue.worker"]
     environment:
       - DATABASE_URL=postgresql+psycopg://knowflow:knowflow@db:5432/knowflow
-      - KAFKA_URL=kafka:9092
+      - REDIS_URL=redis://redis:6379/0
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - QDRANT_URL=http://qdrant:6333
     depends_on:
       db:
         condition: service_healthy

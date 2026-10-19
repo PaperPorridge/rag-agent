@@ -37,6 +37,21 @@ class Settings(BaseSettings):
     mimo_timeout: float = Field(120.0, description="单次请求超时（秒）")
     mimo_max_retries: int = Field(3, description="最大重试次数")
 
+    # ----- 基础设施（生产连真组件，开发缺省降级）-----
+    # 工厂函数（create_queue / create_cache / create_vector_store）读这些字段决定后端：
+    #   有 URL → 生产组件；无 URL 或连不上 → 内存降级，开发零依赖可跑
+    database_url: str = Field(
+        "sqlite:///./knowflow.db",
+        description="数据库连接串。生产 postgresql+psycopg://...，开发缺省 SQLite",
+    )
+    redis_url: str = Field("", description="Redis 地址，留空则降级到内存缓存")
+    kafka_bootstrap_servers: str = Field("", description="Kafka broker 地址，留空则用 InMemoryQueue")
+    qdrant_url: str = Field(":memory:", description="Qdrant 地址，:memory: 为进程内模式")
+
+    # ----- Embedding（M2 引入）-----
+    embedding_model: str = Field("BAAI/bge-m3", description="Embedding 模型名")
+    embedding_device: str = Field("cpu", description="cpu / cuda / mps")
+
     # ----- 应用 -----
     app_env: str = Field("dev", description="dev / test / prod")
     log_level: str = Field("INFO")

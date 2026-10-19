@@ -269,3 +269,51 @@ async def enqueue_doc_ingest(
         key=doc_id,
         headers={"event": "doc.ingest.requested"},
     )
+
+
+# ---------------------------------------------------------------------------
+# 进程入口：python -m knowflow.queue.worker
+#
+# 【为什么单独一个入口，而不是塞进 docker-compose 的 command？】
+#   compose 的 command 若用 YAML 折叠标量（>），多行 Python 会被折成一行 → SyntaxError，
+#   容器永远起不来。把启动逻辑放这里，compose 只需一行
+#   command: ["python", "-m", "knowflow.queue.worker"]
+#   本地也能直接跑，好调试、好测。
+# ---------------------------------------------------------------------------
+def _build_ingest_fn() -> Callable[[list[tuple[str, str]]], int] | None:
+    """构造真正的入库函数；依赖不全时返回 None（worker 走 demo 分支）。"""
+    try:
+        from knowflow.rag.pipeline import RAGPipeline
+
+        pipeline = RAGPipeline()
+        log.info("worker_ingest_fn", mode="rag_pipeline")
+        return pipeline.ingest_batch
+    except Exception as exc:
+        log.warning(
+            "worker_ingest_fn_unavailable",
+            error=str(exc),
+            action="demo_mode_only",
+            hint="缺 embedding/向量库依赖时消息只做状态流转，不真的写索引",
+        )
+        return None
+
+
+def main() -> None:
+    """Worker 进程主入口。"""
+    from knowflow.core.config import get_settings
+    from knowflow.queue import create_queue
+
+    settings = get_settings()
+    log.info(
+        "worker_starting",
+        env=settings.app_env,
+        kafka=settings.kafka_bootstrap_servers or "(memory)",
+    )
+
+    queue = create_queue()
+    worker = IngestWorker(queue=queue, ingest_fn=_build_ingest_fn())
+    asyncio.run(worker.run_forever())
+
+
+if __name__ == "__main__":
+    main()

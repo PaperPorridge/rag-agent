@@ -177,8 +177,13 @@ class RedisCache(CacheStore):
 def create_cache(url: str | None = None) -> CacheStore:
     """
     工厂：有 Redis URL 就用 Redis，否则内存。
-    Redis 初始化失败也降级到内存 —— 缓存挂了不该影响主流程。
+    url 不传时从配置读 REDIS_URL；Redis 初始化失败也降级到内存 ——
+    缓存挂了不该影响主流程。
     """
+    if url is None:
+        from knowflow.core.config import get_settings
+
+        url = get_settings().redis_url or None
     if url:
         try:
             cache = RedisCache(url)

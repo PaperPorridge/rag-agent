@@ -9,8 +9,9 @@
 # 【多阶段构建的好处】
 #   阶段 1 (builder): 安装编译依赖、pip install
 #   阶段 2 (runtime): 只带运行时需要的文件
-#   → 最终镜像不含 gcc/头文件，体积从 1.2GB 缩到 ~300MB
+#   → 最终镜像不含 gcc/头文件，体积明显缩小
 #   → 攻击面更小（编译工具链不进生产镜像）
+#   [待测] 具体体积数字请以 `docker images` 实测为准，不要引用估算值
 
 # ---------------------------------------------------------------------------
 # 阶段 1：构建（安装依赖）
@@ -28,9 +29,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# 先只拷 requirements.txt → Docker 缓存这层，代码变了不用重装依赖
+# 分层缓存顺序：依赖清单和源码必须都进构建层，hatchling 才能打包。
+#   COPY pyproject.toml + knowflow/ → pip install → 依赖装进 /install
+# 依赖层的缓存命中介于「改依赖」和「改代码」之间；要极致缓存可先导出
+# requirements.lock 只装第三方依赖，再 --no-deps 装本包（个人项目从简）。
 COPY pyproject.toml .
-RUN pip install --no-cache-dir --prefix=/install .
+COPY knowflow/ ./knowflow/
+
+# extras 必须显式列出：server 带 uvicorn/fastapi，queue 带 aiokafka，
+# 否则 CMD 的 `python -m uvicorn` 会 No module named uvicorn（本次修的坑）
+RUN pip install --no-cache-dir --prefix=/install ".[rag,data,queue,server]"
 
 # ---------------------------------------------------------------------------
 # 阶段 2：运行（最小镜像）
