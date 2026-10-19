@@ -60,7 +60,7 @@ python -m knowflow.demos.m8_deploy_lab      # 部署讲解
 
 | 文档 | 内容 |
 |---|---|
-| [docs/00-学习路线图.md](docs/00-学习路线图.md) | 总学习路径、技术栈 技能对照、进度表 |
+| [docs/00-学习路线图.md](docs/00-学习路线图.md) | 总学习路径、技术栈对照、进度表 |
 | [docs/01-Prompt工程.md](docs/01-Prompt工程.md) | M1：提示词工程化 |
 | [docs/02-RAG.md](docs/02-RAG.md) | M2：分块 / Embedding / 混合检索 / 重排 / 引用 |
 | [docs/03-Agent与Function-Calling.md](docs/03-Agent与Function-Calling.md) | M3：ReAct 循环、工具 Schema、安全护栏 |
@@ -70,7 +70,6 @@ python -m knowflow.demos.m8_deploy_lab      # 部署讲解
 | [docs/07-服务化.md](docs/07-服务化.md) | M6：FastAPI、依赖注入、202 异步 |
 | [docs/08-评估体系.md](docs/08-评估体系.md) | M7：RAG 四指标、LLM-as-judge |
 | [docs/09-容器化与部署.md](docs/09-容器化与部署.md) | M8：Docker、compose、云映射、Linux 运维 |
-| [docs/resume-素材.md](docs/resume-素材.md) | 项目要点、可写数字清单、自查速查 |
 
 ## 架构
 

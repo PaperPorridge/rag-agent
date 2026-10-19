@@ -343,7 +343,7 @@ def main() -> None:
     section("M4.5 演示完成")
     print("  结论: 「核心链路手写保证可控可调试，周边集成借 LangChain 生态，")
     print("            两者对照过，清楚框架在封装什么、什么时候该绕开。」")
-    print("  下一步: 说「进 M5」进入 Kafka 文档异步入库流水线。")
+    print("  下一步 M5: 消息队列异步入库 —— python -m knowflow.demos.m5_queue_lab")
 
 
 if __name__ == "__main__":

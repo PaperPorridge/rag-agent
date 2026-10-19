@@ -33,7 +33,7 @@ dist/
 logs/
 *.log
 
-# 文档与项目（不进运行镜像）
+# 文档（不进运行镜像）
 docs/
 *.md
 !README.md

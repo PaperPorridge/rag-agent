@@ -161,7 +161,7 @@ def demo_cloud_mapping():
 # 4. Linux 运维
 # ---------------------------------------------------------------------------
 def demo_linux():
-    section("4. Linux 运维 —— 自查常考")
+    section("4. Linux 运维 —— 常用排查")
 
     commands = [
         ("进程管理", [

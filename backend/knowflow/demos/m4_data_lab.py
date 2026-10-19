@@ -238,8 +238,7 @@ def main() -> None:
     demo_fallback()
 
     section("M4 演示完成")
-    print("  下一步: 自测题，答案发我评分。")
-    print("  答完可以说「进 M5」进入 Kafka 消息流水线。")
+    print("  下一步 M5: 消息队列异步入库 —— python -m knowflow.demos.m5_queue_lab")
 
 
 if __name__ == "__main__":
