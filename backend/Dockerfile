@@ -36,9 +36,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml .
 COPY knowflow/ ./knowflow/
 
-# extras 必须显式列出：server 带 uvicorn/fastapi，queue 带 aiokafka，
+# extras 必须显式列出：server 带 uvicorn/fastapi，queue 带 aiokafka，ingest 带 pypdf，
 # 否则 CMD 的 `python -m uvicorn` 会 No module named uvicorn（本次修的坑）
-RUN pip install --no-cache-dir --prefix=/install ".[rag,data,queue,server]"
+RUN pip install --no-cache-dir --prefix=/install ".[rag,data,queue,server,ingest]"
 
 # ---------------------------------------------------------------------------
 # 阶段 2：运行（最小镜像）

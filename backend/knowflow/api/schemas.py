@@ -20,19 +20,42 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 # 问答
 # ---------------------------------------------------------------------------
+class ChatTurn(BaseModel):
+    """多轮对话里的一轮。role ∈ {user, assistant}，不做 system（那是服务端的事）。"""
+
+    role: str = Field(..., pattern="^(user|assistant)$", description="发言角色")
+    content: str = Field(..., min_length=1, max_length=8000, description="发言内容")
+
+
 class AskRequest(BaseModel):
     """POST /ask 的请求体。"""
 
     question: str = Field(..., min_length=1, max_length=2000, description="用户问题")
     top_k: int = Field(5, ge=1, le=20, description="检索返回的片段数")
-    conversation_id: str | None = Field(None, description="会话 ID（多轮对话）")
+    history: list[ChatTurn] = Field(default_factory=list, description="多轮对话历史")
+    conversation_id: str | None = Field(None, description="会话 ID（前端本地用，服务端不持久化）")
 
 
-class Source(BaseModel):
-    """一个引用来源。"""
+class RetrievedSource(BaseModel):
+    """一条被检索到的证据块。前端渲染「出处」列表。"""
 
     citation: str = Field(..., description="引用标记，如 差旅报销制度.pdf#0")
-    score: float = Field(..., description="相关性得分")
+    source: str = Field(..., description="来源文件名")
+    chunk_index: int = Field(..., description="块序号")
+    snippet: str = Field(..., description="片段摘要（截断后的正文）")
+    score: float = Field(..., description="融合得分（重排后优先，否则 RRF）")
+
+
+class ToolCallTrace(BaseModel):
+    """Agent 一次工具调用的轨迹。直答链路返回空数组。"""
+
+    step: int = Field(..., description="第几步（1 起）")
+    tool_name: str = Field(..., description="工具名")
+    arguments: dict = Field(default_factory=dict, description="调用参数")
+    result: str = Field("", description="工具返回（截断）")
+    ok: bool = True
+    error: str | None = None
+    latency_ms: float = 0.0
 
 
 class AskResponse(BaseModel):
@@ -40,40 +63,16 @@ class AskResponse(BaseModel):
 
     answer: str
     question: str
-    sources: list[str] = Field(default_factory=list)
+    chain: str = Field("rag", description="实际走的链路：rag = 直接问答，agent = 工具循环")
+    router_reason: str = Field("", description="分流理由（便于排查路由误判）")
+    sources: list[str] = Field(default_factory=list, description="来源文件名列表")
+    retrieved: list[RetrievedSource] = Field(default_factory=list, description="检索到的证据块")
+    tool_traces: list[ToolCallTrace] = Field(default_factory=list, description="Agent 工具轨迹")
     citations_valid: bool = True
     citation_errors: list[str] = Field(default_factory=list)
     n_retrieved: int = 0
+    steps: int = Field(0, description="Agent 步数（直答为 0）")
     cost_cny: float = 0.0
-
-
-# ---------------------------------------------------------------------------
-# Agent
-# ---------------------------------------------------------------------------
-class AgentRequest(BaseModel):
-    """POST /agent 的请求体。"""
-
-    question: str = Field(..., min_length=1, max_length=2000, description="用户问题")
-    max_steps: int = Field(6, ge=1, le=10, description="最大工具调用步数")
-
-
-class ToolCallTrace(BaseModel):
-    """一次工具调用的轨迹（可观测性）。"""
-
-    step: int
-    tool_name: str
-    args: dict = Field(default_factory=dict)
-    ok: bool = True
-    error: str | None = None
-
-
-class AgentResponse(BaseModel):
-    answer: str
-    traces: list[ToolCallTrace] = Field(default_factory=list)
-    steps: int = 0
-    total_tokens: int = 0
-    cost_cny: float = 0.0
-    finished_reason: str = "done"
 
 
 # ---------------------------------------------------------------------------
@@ -88,13 +87,14 @@ class DocumentUploadRequest(BaseModel):
 
 
 class DocumentStatusResponse(BaseModel):
-    """GET /documents/{doc_id} 的响应体。"""
+    """GET /documents/{doc_id} 的响应体，也是列表项。"""
 
     doc_id: str
     source: str
     status: str = Field(..., description="pending / processing / ready / failed")
     chunk_count: int = 0
     error: str | None = None
+    created_at: str | None = Field(None, description="创建时间 ISO8601")
 
 
 class DocumentUploadResponse(BaseModel):
@@ -104,6 +104,21 @@ class DocumentUploadResponse(BaseModel):
     message_id: str
     status: str = "pending"
     detail: str = "文档已接收，正在异步入库"
+
+
+class DocumentListResponse(BaseModel):
+    """GET /documents 的响应体。"""
+
+    items: list[DocumentStatusResponse] = Field(default_factory=list)
+    total: int = 0
+
+
+class DocumentDeleteResponse(BaseModel):
+    """DELETE /documents/{doc_id} 的响应体。"""
+
+    doc_id: str
+    deleted: bool = True
+    detail: str = "文档及其向量已删除"
 
 
 # ---------------------------------------------------------------------------

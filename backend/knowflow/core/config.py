@@ -46,13 +46,20 @@ class Settings(BaseSettings):
     )
     redis_url: str = Field("", description="Redis 地址，留空则降级到内存缓存")
     kafka_bootstrap_servers: str = Field("", description="Kafka broker 地址，留空则用 InMemoryQueue")
-    qdrant_url: str = Field(":memory:", description="Qdrant 地址，:memory: 为进程内模式")
+    qdrant_url: str = Field(":memory:", description="Qdrant 地址。:memory: 进程内；生产 http://qdrant:6333")
 
     # ----- Embedding（M2 引入）-----
-    embedding_model: str = Field("BAAI/bge-m3", description="Embedding 模型名")
+    embedding_model: str = Field(
+        "BAAI/bge-m3",
+        description="Embedding 模型名。生产 BAAI/bge-m3；测试/CI 可用 hashing-256 零依赖",
+    )
     embedding_device: str = Field("cpu", description="cpu / cuda / mps")
 
     # ----- 应用 -----
+    cors_origins: str = Field(
+        "http://localhost:5173,http://127.0.0.1:5173",
+        description="CORS 允许来源，逗号分隔。开发指向 Vite dev server",
+    )
     app_env: str = Field("dev", description="dev / test / prod")
     log_level: str = Field("INFO")
 

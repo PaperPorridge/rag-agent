@@ -82,12 +82,22 @@ class RAGPipeline:
         chunker: BaseChunker | None = None,
         reranker: Reranker | None = None,
         collection: str = "knowflow",
-        store_location: str = ":memory:",
+        store_location: str | None = None,
     ) -> None:
+        # 【为什么从 settings 读而不是写死？】
+        #   换 embedding 模型 / 换向量库地址应该只改环境变量，不改代码。
+        #   测试注入 fake 时走参数，生产走配置 —— 两条路都通。
+        from knowflow.core.config import get_settings
+
+        settings = get_settings()
         self.llm = llm or LLMClient()
-        self.embedder = embedder or create_embedder("hashing-256")
+        self.embedder = embedder or create_embedder(
+            settings.embedding_model, settings.embedding_device
+        )
         self.store = store or create_vector_store(
-            dim=self.embedder.dimension, location=store_location, collection=collection
+            dim=self.embedder.dimension,
+            location=store_location or settings.qdrant_url,
+            collection=collection,
         )
         self.chunker = chunker or RecursiveChunker(chunk_size=512, overlap=64)
         self.bm25 = BM25Index()
@@ -145,6 +155,7 @@ class RAGPipeline:
         top_k: int = 5,
         filters: dict[str, Any] | None = None,
         use_rerank: bool = True,
+        history: list[dict[str, Any]] | None = None,
     ) -> RAGAnswer:
         """一次 RAG 问答。返回答案 + 检索证据 + 引用校验结果。"""
         retrieved = self.retriever.retrieve(
@@ -162,7 +173,8 @@ class RAGPipeline:
         system = registry.render("rag_qa", question=question, context=context)
         # rag_qa 模板已含 question/context，这里把它整体作为 system，
         # user 再重复一次问题 —— 让模型明确「要回答的是这个问题」
-        resp = self.llm.chat(question, system=system)
+        # history 只调节生成（多轮指代），检索仍按单轮问题 —— 如实边界
+        resp = self.llm.chat(question, system=system, history=history)
 
         sources = [r.citation for r in retrieved]
         valid, errors = validate_citations(resp.content, sources)
@@ -180,6 +192,40 @@ class RAGPipeline:
     def search_only(self, question: str, top_k: int = 5, use_rerank: bool = True) -> list[RetrievedChunk]:
         """只检索不生成 —— 调试检索质量、做检索层评估时用（省 token）。"""
         return self.retriever.retrieve(question, top_k=top_k, use_rerank=use_rerank)
+
+    def delete(self, source: str) -> int:
+        """
+        删除一个来源的全部向量与 BM25 条目。
+
+        【为什么 BM25 要重建？】
+          BM25 是内存倒排索引，没有删除接口；直接过滤全集后重建
+          —— 量级（万级块）下重建是毫秒级，比维护增量删除简单且不易出错。
+        """
+        n = self.store.delete_by_source(source)
+        before = len(self._all_chunks)
+        self._all_chunks = [c for c in self._all_chunks if c.source != source]
+        self.bm25.index(self._all_chunks)
+        log.info(
+            "pipeline_deleted_source",
+            source=source,
+            vectors=n,
+            chunks_removed=before - len(self._all_chunks),
+        )
+        return before - len(self._all_chunks)
+
+    def restore_bm25_from_store(self) -> int:
+        """
+        从向量库回填 BM25（进程重启后调用）。
+
+        【为什么需要它？】
+          向量在 Qdrant 持久化，BM25 在进程内存。重启后只恢复了一半索引，
+          混合检索会瘸腿。启动时把 Qdrant 里的 payload 读回来重建 BM25。
+        """
+        chunks = self.store.list_chunks()
+        self._all_chunks = chunks
+        self.bm25.index(self._all_chunks)
+        log.info("bm25_restored", n_chunks=len(chunks))
+        return len(chunks)
 
 
 def validate_citations(answer: str, valid_sources: list[str]) -> tuple[bool, list[str]]:

@@ -72,6 +72,10 @@ class VectorStore(ABC):
     def delete_by_source(self, source: str) -> int:
         """按来源文件删除（文档更新时先删后插）。"""
 
+    @abstractmethod
+    def list_chunks(self) -> list[Chunk]:
+        """导出全部已存块 —— 进程重启后回填 BM25 用。"""
+
 
 class QdrantVectorStore(VectorStore):
     """
@@ -203,6 +207,29 @@ class QdrantVectorStore(VectorStore):
         log.info("vector_deleted_by_source", source=source)
         return 0  # Qdrant 不返回删除数，需要可自行 count 前后差值
 
+    def list_chunks(self) -> list[Chunk]:
+        """scroll 全量 payload 重建 Chunk —— 只在启动回填时调用。"""
+        chunks: list[Chunk] = []
+        offset = None
+        while True:
+            records, offset = self._client.scroll(
+                collection_name=self._collection,
+                limit=256,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for r in records:
+                pl = r.payload or {}
+                text = pl.get("text", "")
+                source = pl.get("source", "")
+                idx = int(pl.get("chunk_index", 0))
+                meta = {k: v for k, v in pl.items() if k not in ("text", "source", "chunk_index")}
+                chunks.append(Chunk(text=text, source=source, chunk_index=idx, metadata=meta))
+            if offset is None:
+                break
+        return chunks
+
 
 class InMemoryVectorStore(VectorStore):
     """
@@ -270,6 +297,9 @@ class InMemoryVectorStore(VectorStore):
         self._chunks = [c for c, _ in keep]
         self._vectors = [v for _, v in keep]
         return before - len(self._chunks)
+
+    def list_chunks(self) -> list[Chunk]:
+        return list(self._chunks)
 
 
 def create_vector_store(

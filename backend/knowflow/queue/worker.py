@@ -200,6 +200,9 @@ class IngestWorker:
                 last_err = exc
                 self.stats.dead_lettered += 1
                 await self.queue.nack_to_dlq(msg, error=str(exc))
+                self._set_status(
+                    str(msg.value.get("doc_id", "")), "failed", 0, error=str(exc)
+                )
                 log.error("worker_poison", error=str(exc), message_id=msg.message_id)
                 return True
             except RetryableError as exc:
@@ -230,6 +233,9 @@ class IngestWorker:
         # 重试耗尽 → 死信
         self.stats.dead_lettered += 1
         await self.queue.nack_to_dlq(msg, error=f"retries_exhausted: {last_err}")
+        self._set_status(
+            str(msg.value.get("doc_id", "")), "failed", 0, error=f"retries_exhausted: {last_err}"
+        )
         log.error("worker_dlq_after_retries", message_id=msg.message_id, error=str(last_err))
         return True
 
@@ -310,8 +316,12 @@ def main() -> None:
         kafka=settings.kafka_bootstrap_servers or "(memory)",
     )
 
+    from knowflow.db.repo import db_on_status
+
     queue = create_queue()
-    worker = IngestWorker(queue=queue, ingest_fn=_build_ingest_fn())
+    worker = IngestWorker(
+        queue=queue, ingest_fn=_build_ingest_fn(), on_status=db_on_status
+    )
     asyncio.run(worker.run_forever())
 
 

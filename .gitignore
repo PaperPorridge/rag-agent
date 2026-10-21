@@ -38,3 +38,11 @@ eval_reports/
 
 # 学习笔记/文档不进仓库，只留项目本体
 docs/
+
+# 非项目本体
+experiments/
+plan.md
+
+# 前端构建产物
+frontend/node_modules/
+frontend/dist/

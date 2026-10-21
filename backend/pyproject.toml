@@ -30,6 +30,10 @@ rag = [
     "sentence-transformers>=3.0.0",
     "rank-bm25>=0.2.2",
 ]
+# 文档解析：PDF 文本层（pypdf 零编译依赖，纯 Python）
+ingest = [
+    "pypdf>=5.0.0",
+]
 # M4 · 数据层：关系库 ORM + 迁移 + 缓存
 data = [
     "sqlalchemy>=2.0.36",
@@ -46,6 +50,22 @@ langchain = [
     "langchain-qdrant>=1.1.0",
     "langchain-text-splitters>=1.1.0",
     "langsmith>=0.14.0",
+]
+# LangGraph 编排层（多 Agent 图 / interrupt 审批 / Send 扇出）
+#
+# 【为什么要钉死小版本？】
+#   langchain-community sunset 之后 EnsembleRetriever 换了位置，旧教程直接跑不起来。
+#   LangGraph 1.x 更名同样频繁：Send 从 langgraph.graph 搬到 langgraph.types，
+#   create_react_agent（langgraph.prebuilt）与 create_agent（langchain.agents）分居两处。
+#   实测导入路径锁在 tests/test_langgraph_smoke.py，升级前先跑它。
+graph = [
+    "langgraph==1.2.16",
+    "langgraph-prebuilt==1.1.1",
+    "langgraph-checkpoint==4.3.0",
+    "langgraph-checkpoint-sqlite==3.1.2",    # 开发/测试持久化
+    "langgraph-checkpoint-postgres==3.2.0",  # 生产持久化（S4 起）
+    "psycopg[binary]>=3.2.0",                # PostgresSaver 的驱动，缺它 import 就炸
+    "langchain-core==1.6.12",
 ]
 # M5 · 队列：Kafka 客户端 + RabbitMQ 客户端（开发降级用 InMemoryQueue）
 queue = [

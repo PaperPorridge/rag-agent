@@ -1,119 +1,74 @@
-# KnowFlow 知流 · 企业级 RAG 知识库智能体平台
+# KnowFlow 知流 · 企业知识库问答平台
 
-> 面向企业内部文档的智能问答与自动化 Agent 平台。
-> 技术栈：Python / FastAPI / Qdrant / PostgreSQL / Redis / Kafka / Docker / MiMo API
+> 上传文档 → 智能问答（带出处引用）→ 计算题自动切 Agent 工具循环
+> React + FastAPI + Qdrant + PostgreSQL + BAAI/bge-m3 + MiMo API
 
 ## 这是什么
 
-一个**从文档入库到智能问答的完整工程**，而不是 Jupyter 里的 Demo。核心检索与 Agent 链路**手写实现了一遍**，又用 LangChain 做了对照版本，所以清楚框架在封装什么、什么场景该用、什么场景该绕开。
+一个**浏览器可用的企业知识库 Agent**。核心检索与 Agent 链路手写实现（不用 LangChain 跑主流程），存储与向量化用生产级组件，为评估量化打底。
 
-**已落地（M0~M8，代码可跑）**
+**核心能力**
 
-- **Prompt 工程化**：Jinja2 模板 + 版本注册表（v1.0.0 / v1.1.0 可回滚）+ 结构化输出校验 + 注入三层防御
-- **混合检索 RAG**：向量 + BM25 并行召回 → **RRF(k=60)** 融合 → **CrossEncoder 精排** → 引用溯源校验
-- **Function Calling Agent**：ReAct 多工具编排，含参数四重校验、AST 白名单计算器、SQL 只读三重守卫、HITL 人工确认
-- **数据层可靠性**：SQLAlchemy 2.0 五张业务表 + 事务边界 + 连接池调优 + 令牌桶限流 + 缓存降级
-- **消息队列异步入库**：Kafka 抽象层 + Worker 消费者 + 幂等消费 + 三类异常分流 + 死信队列
-- **REST 服务化**：FastAPI + Pydantic 契约 + 依赖注入 + 202 异步入库 + OpenAPI 自动文档
-- **评估体系**：Faithfulness / Answer Relevancy / Context Precision / Context Recall 四指标 + LLM-as-judge 适配层
-- **容器化部署**：多阶段 Dockerfile + docker-compose 六服务编排 + 云组件映射
-
-**文档格式说明（诚实边界）**：当前入库接口接受**纯文本**字段（`POST /documents` 的 `text`）。PDF / Word 解析预留了 `DocParser` 接口，尚未接入 pypdf / python-docx。不要把它当成已交付的多格式能力。
-
-**评估说明**：四指标由手写 `SimpleEvaluator`（关键词匹配，零成本，适合 CI 回归）计算；`RagasEvaluator` 适配层已就绪，但 `ragas` 尚未加入依赖组，正式 LLM-as-judge 评估**待实测**。
+- **文档入库**：PDF 文本层解析 / txt / md，异步队列 + 状态机（pending → processing → ready/failed）
+- **混合检索 RAG**：bge-m3 向量 + BM25 并行召回 → RRF(k=60) 融合 → CrossEncoder 精排 → 引用溯源校验
+- **融合问答**：Router 自动分流——事实问题直答，计算/多步问题走 Agent 工具循环，单入口 `/ask` 返回链路徽章与工具轨迹
+- **ReAct Agent**：知识库检索 + AST 白名单计算器，调用轨迹完整可溯
+- **Web 前端**：React + Vite 双面板 SPA，文档管理 + 多轮对话 + 出处折叠 + 工具轨迹展示
 
 ## 快速开始
 
 ```bash
-# 1. 配置环境变量（在仓库根目录执行）
-cp .env.example .env        # 填入你的 MIMO_API_KEY
+# 一次性
+cp .env.example .env                # 填入 MIMO_API_KEY
+cd backend && pip install -e ".[rag,data,server,dev,ingest]"
+cd frontend && npm install
+docker compose up -d db qdrant      # PostgreSQL 16 + Qdrant
 
-# 2. 安装依赖（Python 3.12+）
-cd backend && pip install -e ".[dev]"
+# 终端 1
+cd backend && uvicorn knowflow.api.app:app --reload --port 8000
 
-# 3. 跑通第一课：工程化调用 LLM
-python -m knowflow.demos.m0_hello_llm
-
-# 4. 启动全栈（需要 Docker）
-cd backend && docker compose up -d
-#    起 6 个服务：api + worker + db(PostgreSQL) + redis + kafka + qdrant
-#    API 文档: http://localhost:8000/docs
+# 终端 2
+cd frontend && npm run dev          # http://localhost:5173
 ```
 
-10 个 demo 实验室可逐个跑：
+打开 http://localhost:5173 → 上传 PDF → 问事实问题（带出处）→ 问计算问题（看工具轨迹）。
 
-```bash
-python -m knowflow.demos.m1_prompt_lab      # Prompt 版本管理
-python -m knowflow.demos.m2_rag_lab         # 混合检索 RAG
-python -m knowflow.demos.m3_agent_lab       # ReAct Agent
-python -m knowflow.demos.m4_data_lab        # 数据层 / 限流
-python -m knowflow.demos.m45_langchain_lab  # LangChain 对照
-python -m knowflow.demos.m5_queue_lab       # 消息队列
-python -m knowflow.demos.m6_api_lab         # FastAPI
-python -m knowflow.demos.m7_eval_lab        # 评估体系
-python -m knowflow.demos.m8_deploy_lab      # 部署讲解
-```
+## 接口
 
-> 部分 demo 会真调 MiMo API（`m0` / `m2` / `m3` / `m7`），需有效 `MIMO_API_KEY` 并产生少量费用。`m4` / `m5` / `m6` / `m8` 零成本可跑。
-
-## 模块索引
-
-| 模块 | 内容 | 代码 |
+| 方法 | 路径 | 说明 |
 |---|---|---|
-| M1 | 提示词工程化：模板、版本注册、结构化输出、注入防御 | `knowflow/core/prompts.py` |
-| M2 | RAG：分块 / Embedding / 混合检索 / RRF / 重排 / 引用校验 | `knowflow/rag/` |
-| M3 | Agent：ReAct 循环、Function Calling、安全护栏 | `knowflow/agent/` |
-| M4 | 数据层：SQLAlchemy 2.0、事务、Redis 缓存、限流 | `knowflow/db/` `knowflow/cache/` |
-| M4.5 | LangChain 对照：手写 vs 框架取舍 | `knowflow/demos/m45_langchain_lab.py` |
-| M5 | 消息队列：Kafka 抽象、Worker、幂等、重试与 DLQ | `knowflow/queue/` |
-| M6 | 服务化：FastAPI、依赖注入、202 异步入库 | `knowflow/api/` |
-| M7 | 评估：四指标、LLM-as-judge、参数对比 | `knowflow/eval/` |
-| M8 | 容器化：多阶段 Dockerfile、compose 编排、云映射 | `backend/Dockerfile` |
+| GET | `/api/v1/health` | 组件健康 |
+| POST | `/api/v1/ask` | 融合问答（`chain: rag\|agent`） |
+| POST | `/api/v1/documents` | 粘贴文本入库（202） |
+| POST | `/api/v1/documents/upload` | 文件上传 PDF/txt/md（202/415/422） |
+| GET | `/api/v1/documents` | 文档列表 |
+| DELETE | `/api/v1/documents/{id}` | 删除文档 + 向量 |
 
-## 架构
+## 目录
 
 ```
-                    ┌──────────────────────┐
-                    │   Web / API Client   │
-                    └──────────┬───────────┘
-                               │
-                    ┌──────────▼───────────┐
-                    │   FastAPI 服务层      │  ← M6
-                    │ /health /ask         │
-                    │ /agent /documents    │
-                    └──────────┬───────────┘
-              ┌────────────────┼────────────────┐
-              ▼                ▼                ▼
-      ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-      │  RAG 引擎     │ │ Agent 引擎    │ │  评估引擎    │
-      │ 向量+BM25     │ │ ReAct + FC   │ │ SimpleEvaluator│
-      │ RRF + Rerank │ │ 安全护栏      │ │ + RAGAS 适配 │
-      └──────┬───────┘ └──────┬───────┘ └──────┬───────┘
-             │                │                │
-      ┌──────▼────────────────▼────────────────▼───────┐
-      │  存储: Qdrant · PostgreSQL · Redis              │
-      └──────────────────────┬─────────────────────────┘
-                             │
-      ┌──────────────────────▼─────────────────────────┐
-      │  Kafka 异步流水线: 上传 → 解析 → 向量化 → 通知  │  ← M5
-      └────────────────────────────────────────────────┘
+backend/knowflow/
+  core/       config / LLMClient / prompt 注册表
+  rag/        chunking / embeddings / 混合检索 / RRF / rerank / pipeline
+  agent/      ReAct 循环 / 工具注册表 / Router 分流 / 融合链路
+  ingest/     PDF 文本层解析 + 白名单
+  queue/      Kafka / InMemory 工厂 + Worker（幂等/重试/DLQ）
+  db/         SQLAlchemy 2.0 模型 + session + 状态写回
+  api/        FastAPI 路由 / 契约 / 依赖注入 / lifespan
+frontend/     React 18 + Vite 5 + TypeScript（双面板 SPA）
 ```
+
+## 诚实边界
+
+- 扫描版 PDF 无 OCR，明确 422 拒收
+- 无登录鉴权（内网演示）
+- Agent 工具为只读两件套（知识检索 + 计算器）
+- 检索按单轮问题做，history 只调节生成
 
 ## 部署
 
 ```bash
-cd backend
-docker compose up -d          # 起 6 个服务
-docker compose logs -f api    # 看 API 日志
-docker compose down           # 一键全关
+cd frontend && npm run build     # → frontend/dist
+cd backend && uvicorn knowflow.api.app:app --host 0.0.0.0 --port 8000
+# FastAPI 自动托管 dist，单进程即全栈
 ```
-
-本地组件与云服务的映射（代码零改动，换配置）：
-
-| 本地 | AWS | GCP | Azure |
-|---|---|---|---|
-| Docker 容器 | ECS / EKS | Cloud Run / GKE | Container Instances / AKS |
-| PostgreSQL | RDS | Cloud SQL | Azure DB for PG |
-| Redis | ElastiCache | Memorystore | Azure Cache |
-| Kafka | MSK | Pub/Sub | Event Hubs |
-| 对象存储 | S3 | Cloud Storage | Blob Storage |

@@ -161,9 +161,38 @@ class KafkaQueue(MessageQueue):
             self._started = False
 
 
+def _kafka_reachable(url: str, timeout: float = 1.5) -> bool:
+    """
+    TCP 探活 bootstrap 地址。
+
+    【为什么必须自己探？】
+      AIOKafkaProducer/Consumer 的构造是**惰性**的 —— 不连 broker 也不报错，
+      要到 start()/send() 才炸。所以光靠 try 包住 KafkaQueue(...) 永远成功，
+      工厂会误返回一个「用不了的 Kafka」，开发模式的进程内 Worker 也不会起。
+      探活失败就降级 InMemory，让「没起 Kafka」和「起了 Kafka」两种环境都能跑。
+    """
+    import socket
+
+    for hostport in url.split(","):
+        hostport = hostport.strip()
+        if not hostport:
+            continue
+        # 兼容 host:port 与 kafka://host:port 两种写法
+        hostport = hostport.split("://")[-1].split("/")[0]
+        host, _, port = hostport.rpartition(":")
+        if not host:
+            continue
+        try:
+            with socket.create_connection((host, int(port)), timeout=timeout):
+                return True
+        except (OSError, ValueError):
+            continue
+    return False
+
+
 def create_queue(url: str | None = None, group_id: str = "knowflow-workers") -> MessageQueue:
     """
-    工厂：有 Kafka URL 就用 Kafka，否则内存。
+    工厂：有 Kafka URL 且**真连得上**就用 Kafka，否则内存。
     url 不传时从配置读 KAFKA_BOOTSTRAP_SERVERS；Kafka 连不上也降级 ——
     队列挂了不该让开发跑不动测试。
     """
@@ -171,12 +200,14 @@ def create_queue(url: str | None = None, group_id: str = "knowflow-workers") -> 
         from knowflow.core.config import get_settings
 
         url = get_settings().kafka_bootstrap_servers or None
-    if url:
+    if url and _kafka_reachable(url):
         try:
             q = KafkaQueue(bootstrap_servers=url, group_id=group_id)
             log.info("queue_backend", backend="kafka", url=url)
             return q
         except Exception as exc:
             log.warning("kafka_init_failed", error=str(exc), action="use_memory")
+    elif url:
+        log.warning("kafka_unreachable", url=url, action="use_memory")
     log.info("queue_backend", backend="memory")
     return InMemoryQueue()
