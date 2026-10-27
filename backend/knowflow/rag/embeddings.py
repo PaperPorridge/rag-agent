@@ -149,14 +149,41 @@ class HFEmbedder(EmbeddingProvider):
             ) from exc
 
         self._model_name = model_name
-        self._model = SentenceTransformer(model_name, device=device)
-        self._dim = int(self._model.get_sentence_embedding_dimension())
+        self._model = self._load(model_name, device)
+        # sentence-transformers 3.x 起 get_sentence_embedding_dimension() 标记废弃，
+        # 新名是 get_embedding_dimension()。两个都试，避免新旧版本各炸一次。
+        get_dim = getattr(self._model, "get_embedding_dimension", None)
+        if get_dim is None:
+            get_dim = self._model.get_sentence_embedding_dimension
+        self._dim = int(get_dim())
         self._query_prefix = query_prefix
         log.info("embedder_loaded", model=model_name, dim=self._dim, device=device)
 
     @property
     def dimension(self) -> int:
         return self._dim
+
+    @staticmethod
+    def _load(model_name: str, device: str):
+        """
+        加载 sentence-transformers 模型：优先本地缓存，没有才联网下载。
+
+        【为什么先试 local_files_only？】
+          按模型 ID 加载时，huggingface_hub 会先联网解析 revision/文件清单。
+          断网、代理不通、Hub 超时（WinError 10060）都会让这步失败，
+          之后 AutoProcessor 直接抛 "Unrecognized processing class" ——
+          报错指向模型文件缺失，实际是缓存完好、只是解析没走通。
+          缓存已热的机器不该因为上不了网就起不来；反过来，
+          先走网络则每次都要干等几十秒超时，冷启动体验极差。
+          所以顺序是「本地优先，网络兜底」。
+        """
+        from sentence_transformers import SentenceTransformer
+
+        try:
+            return SentenceTransformer(model_name, device=device, local_files_only=True)
+        except Exception as exc:
+            log.info("embedder_download", model=model_name, reason=str(exc)[:120])
+            return SentenceTransformer(model_name, device=device)
 
     @property
     def model_name(self) -> str:

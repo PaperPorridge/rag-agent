@@ -18,12 +18,20 @@ M7 · 评估数据集
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import structlog
 
 log = structlog.get_logger(__name__)
+
+# 金标准语料目录：随包发布，评估报告直接读这里
+CORPUS_DIR = Path(__file__).resolve().parent / "corpus"
+DISTRACTOR_DIR = CORPUS_DIR / "distractors"
+GOLDEN_PATH = CORPUS_DIR / "golden.jsonl"
+GOLDEN_PARAPHRASE_PATH = CORPUS_DIR / "golden_paraphrase.jsonl"
 
 
 @dataclass
@@ -48,7 +56,21 @@ class EvalCase:
             "answer": self.answer,
             "contexts": self.contexts,
             "expected_facts": self.expected_facts,
+            "metadata": self.metadata,
         }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> EvalCase:
+        """从 JSONL 行还原。answer/contexts 是运行时产物，磁盘上通常为空。"""
+        return cls(
+            question=data["question"],
+            ground_truth=data.get("ground_truth", ""),
+            source=data.get("source", ""),
+            expected_facts=list(data.get("expected_facts", [])),
+            answer=data.get("answer", ""),
+            contexts=list(data.get("contexts", [])),
+            metadata=dict(data.get("metadata", {})),
+        )
 
 
 @dataclass
@@ -90,13 +112,13 @@ def build_demo_dataset() -> EvalDataset:
     ds.add(EvalCase(
         question="差旅报销有时间限制吗？",
         ground_truth="需在出差结束后30天内提交报销单，逾期需部门总监特批。",
-        source="差旅报销制度.pdf",
+        source="差旅报销制度.md",
         expected_facts=["30天内提交", "逾期需特批"],
     ))
     ds.add(EvalCase(
         question="一线城市住宿标准是多少？",
         ground_truth="一线城市每晚500元，二线城市每晚350元。",
-        source="差旅报销制度.pdf",
+        source="差旅报销制度.md",
         expected_facts=["一线城市500元", "二线城市350元"],
     ))
     ds.add(EvalCase(
@@ -120,3 +142,63 @@ def build_demo_dataset() -> EvalDataset:
 
     log.info("demo_dataset_built", n=len(ds))
     return ds
+
+
+# ---------------------------------------------------------------------------
+# JSONL 持久化 —— 金标准要进版本控制，评估结果才可复现
+# ---------------------------------------------------------------------------
+def load_dataset(path: str | Path) -> EvalDataset:
+    """
+    从 JSONL 读数据集（一行一条用例）。
+
+    【为什么用 JSONL 而不是 JSON 数组？】
+      金标准是人工逐条写的，一行一条便于 diff 审阅、按行增删，
+      也便于 git 合并（改一条只动一行）。
+    """
+    p = Path(path)
+    cases: list[EvalCase] = []
+    with p.open("r", encoding="utf-8") as f:
+        for lineno, line in enumerate(f, 1):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            try:
+                cases.append(EvalCase.from_dict(json.loads(line)))
+            except (json.JSONDecodeError, KeyError) as exc:
+                raise ValueError(f"{p}:{lineno} 不是合法的用例行: {exc}") from exc
+
+    ds = EvalDataset(name=p.stem, cases=cases)
+    log.info("dataset_loaded", path=str(p), n=len(ds))
+    return ds
+
+
+def save_dataset(dataset: EvalDataset, path: str | Path) -> Path:
+    """写出 JSONL。用于保存跑完后带 answer/contexts 的快照，便于排障复盘。"""
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("w", encoding="utf-8") as f:
+        for case in dataset:
+            f.write(json.dumps(case.to_dict(), ensure_ascii=False) + "\n")
+    log.info("dataset_saved", path=str(p), n=len(dataset))
+    return p
+
+
+def load_golden() -> EvalDataset:
+    """
+    读随包发布的金标准数据集（25 条手写 QA，含 5 条计算题）。
+
+    这是 M7 的评估基准：改了 embedding / rerank / top_k 之后跑同一份，
+    数字才能横向比。
+    """
+    return load_dataset(GOLDEN_PATH)
+
+
+def load_golden_paraphrase() -> EvalDataset:
+    """
+    读「近义改写版」金标准 —— 同一批问题换成口语化、不逐字复刻原文的措辞。
+
+    逐字版的问题里含「住宿标准」「餐饮补贴」这类原文原词，BM25 直接命中，
+    Context Recall 恒为 1.0，测不出语义检索的价值。改写后词法召回失效，
+    Recall 才有区分度（hashing < bge-m3 < bge-m3+rerank）。
+    """
+    return load_dataset(GOLDEN_PARAPHRASE_PATH)

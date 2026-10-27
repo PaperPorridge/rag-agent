@@ -20,7 +20,7 @@ dependencies = [
     # M4 数据层: sqlalchemy[asyncio], asyncpg, alembic, redis
     # M5 队列: aiokafka
     # M6 服务: fastapi, uvicorn[standard]
-    # M7 评估: ragas, datasets
+    # M7 评估: 已拆成可选组 [eval]，见下方
 ]
 
 [project.optional-dependencies]
@@ -84,6 +84,20 @@ dev = [
     "httpx>=0.27.0",              # FastAPI TestClient 依赖
     "ruff>=0.7.0",
     "ipykernel>=6.29.0",
+]
+# M7 · 评估：RAGAS（LLM-as-judge）+ HuggingFace datasets
+#
+# 【为什么是可选组而不是主依赖？】
+#   1. ragas 拉一堆传递依赖（datasets/evaluate/nlp...），装了会拖慢冷启动
+#   2. CI 回归只跑 SimpleEvaluator（免费、秒级、不联网），用不到 ragas
+#   3. 真跑 ragas 要花 LLM 的钱 —— 依赖也该显式装，不该静默发生
+# 装法: pip install -e ".[rag,eval]"   报告: python -m knowflow.eval.report
+eval = [
+    "ragas>=0.2.0",
+    "datasets>=2.18.0",
+    # ragas 的 judge 只吃 LangChain Runnable 包装过的 LLM，
+    # 不吃裸 OpenAI 客户端 —— 缺这个 RagasEvaluator 只能降级
+    "langchain-openai>=1.7.0",
 ]
 
 [build-system]
